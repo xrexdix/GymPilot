@@ -119,6 +119,7 @@ details>summary::after{content:" ▾";color:var(--mute)}
     <div id="reps" style="margin-top:8px"></div>
   </div>
   <button class="main" id="go">Satz mit Sensor starten</button>
+  <button class="small ghost hidden" id="rawBtn" data-act="raw" style="width:100%;margin:-4px 0 12px">Rohdaten des letzten Satzes kopieren (für Fehlersuche)</button>
   <div class="card" id="today"></div>
 </section>
 
@@ -315,6 +316,8 @@ document.addEventListener('click',async ev=>{
   else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
   else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
   else if(a==='kgm'||a==='kgp'){const k=parseFloat($('kg').value)||0;$('kg').value=Math.max(0,k+(a==='kgp'?2.5:-2.5));}
+  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
+    navigator.clipboard?.writeText(txt).then(()=>{b.textContent='Kopiert ✓ ('+lastRaw.rows.length+' Messwerte) – jetzt im Chat einfügen';},()=>{b.textContent='Kopieren nicht möglich';});}
   else if(a==='rest30'){restEnd+=30000;}
   else if(a==='restSkip'){restEnd=0;}
 });
@@ -332,10 +335,11 @@ function beep(f,ms){if(DB.prefs.snd===false||!ac)return;try{const o=ac.createOsc
 
 // ---------- Sensor & Auswertung ----------
 let listening=false,phase='idle',calib=[],G=[0,0,9.81],gmag=9.81,dir=1,P=null;
-let atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
+let raw=[],lastRaw=null,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
 function onMotion(e){
   const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;cnt++;
   const t=performance.now()/1000;
+  if(phase!=='idle'&&raw.length<20000){const r=e.rotationRate||{},f=x=>Math.round((x||0)*1000)/1000;raw.push([Math.round(t*1000),f(a.x),f(a.y),f(a.z),f(r.alpha),f(r.beta),f(r.gamma),phase==='calib'?0:1,Math.round(v*1000)/1000,inRep?1:0]);}
   if(phase==='calib'){calib.push([a.x,a.y,a.z]);if(calib.length>=90)finishCalib();return;}
   if(phase!=='run'){lastT=t;return;}
   let dt=lastT?t-lastT:.016;lastT=t;if(dt<=0||dt>.1)dt=.016;
@@ -400,6 +404,7 @@ async function enableSensor(){
   return true;
 }
 function stopSet(){
+  lastRaw={ex:curEx,n:reps.length,ua:navigator.userAgent,rows:raw};raw=[];$('rawBtn').classList.remove('hidden');
   phase='idle';$('go').textContent='Satz mit Sensor starten';$('go').classList.remove('stop');
   try{wake?.release();}catch(e){}
   if(reps.length){addSet({n:reps.length,reps:reps.map(r=>({mcv:+r.mcv.toFixed(3),pv:+r.pv.toFixed(3),rom:+r.rom.toFixed(3),dur:+r.dur.toFixed(2),down:+(r.down||0).toFixed(2)}))});status('Satz gespeichert ('+reps.length+' Wdh.)','ok');}
@@ -409,7 +414,7 @@ $('go').onclick=async()=>{
   try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();}catch(e){}
   if(phase!=='idle'){stopSet();return;}
   if(!await enableSensor())return;
-  P=exById(curEx);dir=P.dir;resetLive();alerted=false;calib=[];restEnd=0;phase='calib';
+  P=exById(curEx);dir=P.dir;resetLive();raw=[];alerted=false;calib=[];restEnd=0;phase='calib';
   status('Kalibriere … Handy 1 Sekunde ruhig halten','warn');
   $('go').textContent='Satz beenden';$('go').classList.add('stop');
   try{wake=await navigator.wakeLock?.request('screen');}catch(e){}

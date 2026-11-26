@@ -260,7 +260,7 @@ function renderDev(){
     <div class="row" style="margin-top:10px">${SF.map(([k,l])=>`<label>${l}<input data-xf="${e.id}:set.${k}" value="${esc(e.set[k])}"></label>`).join('')}</div>
     <label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}"></label>
     <h3 style="margin-top:14px">Sensor</h3>
-    <div class="row"><label>Hebephase<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>Gewicht geht hoch</option><option value="-1"${e.dir==-1?' selected':''}>Gewicht geht runter</option></select></label>
+    <div class="row"><label>Erste Bewegung im Satz<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>Hebephase (Geräte)</option><option value="-1"${e.dir==-1?' selected':''}>Absenkphase (z. B. Bankdrücken aus der Ablage)</option></select></label>
     <label>Min. Weg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
     <div class="row" style="margin-top:10px"><label>Tempo hoch (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:tu" value="${e.tu??2}"></label><label>Tempo runter (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:td" value="${e.td??2}"></label></div>
     <h3 style="margin-top:14px">QR-Code / NFC fürs Gerät</h3><code>${esc(linkFor(e.id))}</code>
@@ -316,7 +316,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
   else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
   else if(a==='kgm'||a==='kgp'){const k=parseFloat($('kg').value)||0;$('kg').value=Math.max(0,k+(a==='kgp'?2.5:-2.5));}
-  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
+  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
     navigator.clipboard?.writeText(txt).then(()=>{b.textContent='Kopiert ✓ ('+lastRaw.rows.length+' Messwerte) – jetzt im Chat einfügen';},()=>{b.textContent='Kopieren nicht möglich';});}
   else if(a==='rest30'){restEnd+=30000;}
   else if(a==='restSkip'){restEnd=0;}
@@ -335,42 +335,57 @@ function beep(f,ms){if(DB.prefs.snd===false||!ac)return;try{const o=ac.createOsc
 
 // ---------- Sensor & Auswertung ----------
 let listening=false,phase='idle',calib=[],G=[0,0,9.81],gmag=9.81,dir=1,P=null;
-let raw=[],lastRaw=null,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
+let B=[0,0,0],calL=[],C=[0,0,0,0,0,0],U=[.577,.577,.577],signSet=false,vtmp=0,raw=[],lastRaw=null,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
 function onMotion(e){
   const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;cnt++;
   const t=performance.now()/1000;
-  if(phase!=='idle'&&raw.length<20000){const r=e.rotationRate||{},f=x=>Math.round((x||0)*1000)/1000;raw.push([Math.round(t*1000),f(a.x),f(a.y),f(a.z),f(r.alpha),f(r.beta),f(r.gamma),phase==='calib'?0:1,Math.round(v*1000)/1000,inRep?1:0]);}
-  if(phase==='calib'){calib.push([a.x,a.y,a.z]);if(calib.length>=90)finishCalib();return;}
+  if(phase!=='idle'&&raw.length<20000){const r=e.rotationRate||{},f=x=>Math.round((x||0)*1000)/1000;raw.push([Math.round(t*1000),f(a.x),f(a.y),f(a.z),f(r.alpha),f(r.beta),f(r.gamma),phase==='calib'?0:1,Math.round(v*1000)/1000,inRep?1:0,f(e.acceleration?.x),f(e.acceleration?.y),f(e.acceleration?.z),f(af)]);}
+  if(phase==='calib'){calib.push([a.x,a.y,a.z]);const L=e.acceleration;if(L&&L.x!=null)calL.push([L.x,L.y,L.z]);if(calib.length>=60)finishCalib();return;}
   if(phase!=='run'){lastT=t;return;}
   let dt=lastT?t-lastT:.016;lastT=t;if(dt<=0||dt>.1)dt=.016;
-  const proj=(a.x*G[0]+a.y*G[1]+a.z*G[2])/gmag-gmag; // vertikale Beschleunigung ohne Schwerkraft, + = hoch
-  af+=.35*(proj-af);
+  // 1) Beschleunigung ohne Schwerkraft. iOS rechnet sie per Sensorfusion heraus – auch wenn das Handy kippt.
+  const L=e.acceleration;let lx,ly,lz;
+  if(L&&L.x!=null){lx=L.x-B[0];ly=L.y-B[1];lz=L.z-B[2];}
+  else{lx=a.x-G[0];ly=a.y-G[1];lz=a.z-G[2];}
+  // 2) Bewegungsachse lernen: Hauptrichtung der Beschleunigung (egal ob Gewichtsstapel, Griff oder Hantel)
+  const k=reps.length<2?.02:.006;
+  C[0]+=k*(lx*lx-C[0]);C[1]+=k*(ly*ly-C[1]);C[2]+=k*(lz*lz-C[2]);C[3]+=k*(lx*ly-C[3]);C[4]+=k*(lx*lz-C[4]);C[5]+=k*(ly*lz-C[5]);
+  for(let i=0;i<2;i++){const u=[C[0]*U[0]+C[3]*U[1]+C[4]*U[2],C[3]*U[0]+C[1]*U[1]+C[5]*U[2],C[4]*U[0]+C[5]*U[1]+C[2]*U[2]];const m=Math.hypot(...u);if(m>1e-9)U=u.map(x=>x/m);}
+  let aa=lx*U[0]+ly*U[1]+lz*U[2];
+  // 3) Richtung festlegen: die erste deutliche Bewegung im Satz zählt als positiv
+  if(!signSet){vtmp=(vtmp+aa*dt)*.99;
+    if(Math.abs(vtmp)>.05){if(vtmp<0){U=U.map(x=>-x);vtmp=-vtmp;}signSet=true;v=vtmp*dir;af=0;}else aa=0;}
+  if(!signSet)aa=0;
+  af+=.35*(aa-af);
   const r=e.rotationRate||{},rot=Math.hypot(r.alpha||0,r.beta||0,r.gamma||0);
-  // Ruhe-Erkennung: kaum Beschleunigung und Drehung. Achtung: langsame, gleichmäßige
-  // Bewegung sieht für den Sensor genauso aus – darum während einer Wiederholung nie zurücksetzen.
-  stillT=(Math.abs(af)<.15&&rot<12)?stillT+dt:0;
+  // Ruhe-Erkennung: kaum Beschleunigung und Drehung. Langsame, gleichmäßige Bewegung sieht genauso aus –
+  // darum wird während einer Wiederholung nie zurückgesetzt.
+  stillT=(Math.hypot(lx,ly,lz)<.2&&rot<12)?stillT+dt:0;
   v+=af*dir*dt;
+  // Schutz gegen Drift: unmögliche Werte oder ewig lange Absenkphase -> neu ansetzen
+  if(!inRep&&(v<-2.5||(ecc&&t-ecc.t0>Math.max(6,3*(P.td??2))))){v=0;ecc=null;pos=0;atTop=false;}
   if(!inRep){
     if(ecc==null&&reps.length&&v<-.015){ecc={t0:t-dt,vm:0};stillT=0;}
     if(ecc){ecc.vm=Math.min(ecc.vm,v);
-      if(ecc.vm<-.05&&v>-.01){reps[reps.length-1].down=t-ecc.t0;ecc=null;atTop=false;pos=0;renderReps();}
+      if(ecc.vm<-.05&&v>-.01){reps[reps.length-1].down=t-ecc.t0;ecc=null;atTop=false;pos=0;v=0;renderReps();}
       else if(stillT>.5){reps[reps.length-1].down=Math.max(.2,t-stillT-ecc.t0+.15);ecc=null;atTop=false;v=0;pos=0;renderReps();}}
     else{v*=.995;if(stillT>.35){v=0;if(!atTop)pos=0;}}
   }
   if(!inRep&&v>.04){inRep=true;acc={t:0,sum:0,n:0,pk:0,d:0};pos=0;if(tStart==null)tStart=t;
     if(ecc){reps[reps.length-1].down=t-ecc.t0;ecc=null;renderReps();}}
   pos=Math.max(0,pos+v*dt);
-  if(inRep){acc.t+=dt;acc.sum+=Math.max(v,0);acc.n++;acc.d+=Math.max(v,0)*dt;if(v>acc.pk)acc.pk=v;
+  if(inRep){acc.t+=dt;acc.sum+=Math.max(v,0);acc.n++;acc.d+=Math.max(v,0)*dt;if(v>acc.pk)acc.pk=v;if(v>.06*acc.pk){acc.tl=acc.t;acc.nl=acc.n;acc.sl=acc.sum;}
     // Ende: Bewegung kehrt um, oder oben längere Pause, oder Sicherheitsgrenze 8 s
-    if(v< -.02||(stillT>.6&&v<.15)||acc.t>8){inRep=false;v=0;stillT=0;atTop=true;if(acc.d*100>=P.rom&&acc.t>=.25)addRep({mcv:acc.sum/acc.n,pv:acc.pk,rom:acc.d,dur:acc.t,down:0});}}
+    if(v< -.02||(stillT>.25&&v<.35*acc.pk)||acc.t>8){inRep=false;v=0;stillT=0;atTop=true;if(acc.d*100>=P.rom&&acc.tl>=.25)addRep({mcv:acc.sl/acc.nl,pv:acc.pk,rom:acc.d,dur:acc.tl,down:0});}}
   hist.push({t,p:pos});if(hist.length>800)hist.shift();
   trace.push(v);if(trace.length>420)trace.shift();
 }
+window.gpDebug=()=>({raw,U,B,signSet});
 function finishCalib(){
   const n=calib.length,m=[0,1,2].map(i=>calib.reduce((s,c)=>s+c[i],0)/n);
   const sd=Math.sqrt(calib.reduce((s,c)=>s+(c[0]-m[0])**2+(c[1]-m[1])**2+(c[2]-m[2])**2,0)/n);
-  if(sd>.25){calib=[];status('Zu viel Bewegung – Handy ruhig halten …','warn');return;}
-  G=m;gmag=Math.hypot(...m);phase='run';af=0;v=0;lastT=0;stillT=0;inRep=false;trace=[];pos=0;hist=[];ecc=null;tStart=null;setT0=performance.now()/1000;
+  if(sd>.25){calib=[];calL=[];status('Zu viel Bewegung – Handy ruhig halten …','warn');return;}
+  G=m;gmag=Math.hypot(...m);B=calL.length?[0,1,2].map(i=>calL.reduce((s,c)=>s+c[i],0)/calL.length):[0,0,0];calL=[];C=[0,0,0,0,0,0];U=[.577,.577,.577];signSet=false;vtmp=0;phase='run';af=0;v=0;lastT=0;stillT=0;inRep=false;trace=[];pos=0;hist=[];ecc=null;tStart=null;setT0=performance.now()/1000;
   status('Los! Wiederholungen werden erkannt.','ok');beep(880,120);
 }
 function addRep(r){

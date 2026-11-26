@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GymPilot">
+<meta name="theme-color" content="#121418">
+<title>GymPilot</title>
+<style>
+/* GymPilot v2 – Trainingsplan, Geräteeinstellungen, Handy als Bewegungssensor */
+:root{--bg:#121418;--card:#1b1e24;--in:#0f1114;--line:#2b3039;--ink:#f1f2f4;--mute:#8d95a3;--acc:#ff6a2b;--ok:#4ed49a;--warn:#ffb020;--bad:#ff4d5e}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 90px)}
+main{max-width:640px;margin:0 auto;padding:8px 16px}
+header{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 10px}
+h1{font-size:24px;margin:0;letter-spacing:-.02em}h1 b{color:var(--acc)}
+h2{font-size:20px;margin:4px 0 12px;line-height:1.2}h3{font-size:16px;margin:0 0 8px}
+.mute{color:var(--mute);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute);flex:1 1 120px}
+select,input,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--in);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:44px;width:100%}
+textarea{min-height:80px}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;min-height:44px;padding:0 16px;background:#2a2f38;color:var(--ink);cursor:pointer}
+button.main{background:var(--acc);color:#1a0d05;width:100%;font-size:19px;min-height:60px;margin-bottom:12px}
+button.stop{background:var(--bad);color:#fff}
+button.small{min-height:36px;padding:0 12px;font-size:14px}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:#171a1f;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{background:none;border-radius:0;min-height:56px;font-size:13px;color:var(--mute)}
+nav button.on{color:var(--acc)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.chips button{flex:none;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+.chips button.on{background:var(--acc);color:#1a0d05;border-color:var(--acc)}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px;min-height:64px}
+.item .t{font-size:17px}.item .s{font-size:13px;color:var(--mute);font-weight:400}
+.prog{font-variant-numeric:tabular-nums;font-size:15px;white-space:nowrap}.prog.done{color:var(--ok)}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.kv div{background:var(--in);border-radius:10px;padding:8px 10px}
+.kv b{display:block;font-size:20px}.kv span{font-size:12px;color:var(--mute)}
+.big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.big div{background:var(--in);border-radius:12px;padding:10px 4px}
+.big strong{display:block;font-size:clamp(28px,9vw,42px);line-height:1.05;font-variant-numeric:tabular-nums}
+.big span{font-size:12px;color:var(--mute)}
+#status{text-align:center;font-weight:600;margin:10px 0 4px;min-height:24px}
+#status.warn{color:var(--warn)}#status.bad{color:var(--bad)}#status.ok{color:var(--ok)}
+.fig{position:relative;height:110px;margin-top:8px}.fig canvas{position:absolute;inset:0;width:100%;height:100%}
+.rep{display:grid;grid-template-columns:26px minmax(0,1fr) 70px;gap:8px;align-items:center;font-size:14px;padding:3px 0;font-variant-numeric:tabular-nums}
+.bar{height:12px;border-radius:6px;background:var(--ok)}
+.rep .v{text-align:right;white-space:nowrap}
+.tip{background:#13261d;border:1px solid #23503a;color:#aef0cd;border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
+.hint{background:#2a2110;border:1px solid #5a4416;color:#ffd99a;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:500;font-size:12px}
+.scroll{overflow-x:auto}
+.pi{display:grid;grid-template-columns:minmax(0,1fr) 56px 56px 68px 36px;gap:6px;align-items:center;margin-bottom:6px}
+@media(max-width:480px){.pi{grid-template-columns:repeat(3,minmax(0,1fr)) 36px;padding-bottom:8px;border-bottom:1px solid var(--line)}.pi>select{grid-column:1/-1}.pih{border:0;padding:0;margin:0}.pih span:first-child{display:none}.pi input::placeholder{color:var(--mute)}}
+.pi input,.pi select{padding:8px 6px}
+.pih{font-size:11px;color:var(--mute)}
+.qr{background:#fff;border-radius:10px;padding:8px;width:180px;margin-top:8px}.qr svg{display:block;width:100%;height:auto}
+code{overflow-wrap:anywhere;font-size:13px;color:var(--mute)}
+details>summary{cursor:pointer;font-weight:600;min-height:32px;list-style:none}
+details>summary::after{content:" ▾";color:var(--mute)}
+#rest{position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom));background:#20242b;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;z-index:4}
+#rest strong{font-size:22px;font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Gym<b>Pilot</b></h1><span class="mute" id="rate"></span></header>
+<div class="hint hidden" id="secure">Die Bewegungssensoren funktionieren nur, wenn die Seite über <b>https://</b> geöffnet ist. Plan und Einstellungen gehen trotzdem.</div>
+
+<!-- TRAINING -->
+<section id="vTrain">
+  <div class="chips" id="days"></div>
+  <div id="dayList"></div>
+  <details class="card"><summary>Andere Übung (ohne Plan)</summary><div id="freeList" style="margin-top:10px"></div></details>
+</section>
+
+<!-- ÜBUNG -->
+<section id="vEx" class="hidden">
+  <div class="row" style="align-items:center;margin-bottom:8px"><button class="small ghost" data-act="back">‹ Zurück</button></div>
+  <h2 id="exName"></h2>
+  <div class="card"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">Geräteeinstellung</h3><button class="small ghost" data-act="editSet">Bearbeiten</button></div><div id="exSet"></div></div>
+  <div class="card" id="exPlan"></div>
+  <div class="card">
+    <div class="row">
+      <label style="flex:1 1 100px">Gewicht (kg)<input id="kg" type="number" inputmode="decimal" step="0.5" min="0"></label>
+      <label style="flex:1 1 100px">Wdh. ohne Sensor<input id="manN" type="number" inputmode="numeric" min="1" placeholder="z. B. 10"></label>
+      <button data-act="manual" style="flex:0 0 auto">Satz eintragen</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="big">
+      <div><strong id="nReps">0</strong><span>Wdh.</span></div>
+      <div><strong id="lastV">–</strong><span>m/s letzte</span></div>
+      <div><strong id="loss">–</strong><span>% Abfall</span></div>
+    </div>
+    <div id="status" class="mute">Handy fest am Gewicht befestigen, dann Satz starten.</div>
+    <div class="fig"><canvas id="cv"></canvas></div>
+    <div id="reps" style="margin-top:8px"></div>
+  </div>
+  <button class="main" id="go">Satz mit Sensor starten</button>
+  <div class="card" id="today"></div>
+</section>
+
+<!-- PLAN -->
+<section id="vPlan" class="hidden">
+  <h2>Trainingsplan</h2>
+  <div id="planEd"></div>
+  <button data-act="addDay" style="width:100%">+ Trainingstag hinzufügen</button>
+  <div class="card" style="margin-top:12px"><label>Pause zwischen den Sätzen (Sekunden)<input id="restS" type="number" inputmode="numeric" min="0" step="15"></label>
+  <label style="flex-direction:row;align-items:center;gap:10px;margin-top:12px;color:var(--ink)"><input id="snd" type="checkbox" style="width:24px;min-height:24px"> Töne</label></div>
+</section>
+
+<!-- GERÄTE -->
+<section id="vDev" class="hidden">
+  <h2>Geräte &amp; Übungen</h2>
+  <div id="devList"></div>
+  <button data-act="addEx" style="width:100%">+ Übung hinzufügen</button>
+</section>
+
+<!-- VERLAUF -->
+<section id="vHist" class="hidden">
+  <h2>Verlauf</h2>
+  <div class="card"><label>Übung<select id="hEx"></select></label><div class="scroll" id="hist" style="margin-top:10px"></div></div>
+  <details class="card"><summary>Daten sichern &amp; übertragen</summary>
+    <p class="mute">Alle Daten liegen nur in diesem Browser. Sichere sie ab und zu.</p>
+    <div class="row"><button class="small" data-act="copy">Alles kopieren</button><button class="small" data-act="dl">Als Datei speichern</button></div>
+    <label style="margin-top:12px">Gesicherte Daten einfügen<textarea id="imp" placeholder="Hier kopierte Daten einfügen"></textarea></label>
+    <button class="small" data-act="import" style="margin-top:8px">Importieren (ersetzt alles)</button>
+  </details>
+</section>
+</main>
+
+<div id="rest" class="hidden"><span>Pause <strong id="restT">0:00</strong></span><span class="row" style="gap:6px"><button class="small" data-act="rest30">+30 s</button><button class="small" data-act="restSkip">Fertig</button></span></div>
+<nav><button data-act="tab" data-t="vTrain" class="on">Training</button><button data-act="tab" data-t="vPlan">Plan</button><button data-act="tab" data-t="vDev">Geräte</button><button data-act="tab" data-t="vHist">Verlauf</button></nav>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,8);
+const dstr=t=>new Date(t).toDateString();
+const fmtKg=k=>(+k||0).toLocaleString('de-DE',{maximumFractionDigits:2});
+const SF=[['sitz','Sitzhöhe'],['lehne','Rückenlehne'],['polster','Polster'],['griff','Griff / Position']];
+const mk=(id,name,rom,loss)=>({id,name,dir:1,rom,loss,set:{sitz:'',lehne:'',polster:'',griff:''},note:''});
+const DEF_EX=[mk('latzug','Latzug',15,20),mk('brustpresse','Brustpresse',15,20),mk('beinpresse','Beinpresse',10,20),mk('rudern','Rudern am Kabel',15,20),
+  mk('schulterpresse','Schulterpresse',15,20),mk('beinstrecker','Beinstrecker',10,25),mk('beinbeuger','Beinbeuger',10,25),
+  mk('kniebeuge','Kniebeuge (Langhantel)',20,20),mk('bankdruecken','Bankdrücken (Langhantel)',15,20),mk('curl','Bizepscurl',15,25)];
+const it=(ex,sets,reps)=>({ex,sets,reps,kg:0});
+const DEF_PLAN=[{id:'a',name:'Tag A – Drücken',items:[it('brustpresse',3,10),it('schulterpresse',3,10),it('bankdruecken',3,8)]},
+  {id:'b',name:'Tag B – Ziehen',items:[it('latzug',3,10),it('rudern',3,10),it('curl',3,12)]},
+  {id:'c',name:'Tag C – Beine',items:[it('kniebeuge',3,8),it('beinpresse',3,10),it('beinstrecker',3,12),it('beinbeuger',3,12)]}];
+
+const KEY='gympilot.v2';
+let DB=null;
+try{DB=JSON.parse(localStorage.getItem(KEY));}catch(e){}
+if(!DB||!Array.isArray(DB.ex)){
+  DB={v:2,ex:DEF_EX,plan:DEF_PLAN,sets:[],prefs:{rest:90,snd:true,day:'a'}};
+  try{const o=JSON.parse(localStorage.getItem('repspeed.v1'));if(o&&o.sets)DB.sets=o.sets.map(s=>({...s,n:s.reps.length}));}catch(e){}
+}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}};
+const exById=id=>DB.ex.find(e=>e.id===id);
+const curDay=()=>DB.plan.find(d=>d.id===DB.prefs.day);
+if(!window.isSecureContext)$('secure').classList.remove('hidden');
+
+// ---------- Navigation ----------
+let tab='vTrain',curEx=null,editSet=false;
+function show(v){
+  for(const s of ['vTrain','vEx','vPlan','vDev','vHist'])$(s).classList.toggle('hidden',s!==v);
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===(v==='vEx'?'vTrain':v)));
+  ({vTrain:renderTrain,vEx:renderEx,vPlan:renderPlan,vDev:renderDev,vHist:renderHist})[v]();
+  scrollTo(0,0);
+}
+function openEx(id){if(phase!=='idle')stopSet();curEx=id;editSet=false;$('kg').value=suggest(id).kg??'';$('manN').value='';resetLive();show('vEx');}
+
+// ---------- Training ----------
+const todaySets=id=>DB.sets.filter(s=>s.ex===id&&dstr(s.t)===dstr(Date.now()));
+function renderTrain(){
+  $('days').innerHTML=DB.plan.map(d=>`<button data-act="day" data-id="${d.id}" class="${d.id===DB.prefs.day?'on':''}">${esc(d.name)}</button>`).join('');
+  const d=curDay();
+  $('dayList').innerHTML=!d?'<p class="mute">Wähle einen Trainingstag oder lege im Plan einen an.</p>':
+    (d.items.length?d.items.map(i=>{const e=exById(i.ex);if(!e)return'';const n=todaySets(e.id).length;
+      return `<button class="item" data-act="open" data-id="${e.id}"><span><span class="t">${esc(e.name)}</span><br><span class="s">${i.sets} × ${i.reps}${+i.kg?' · '+fmtKg(i.kg)+' kg':''}${e.set.sitz?' · Sitz '+esc(e.set.sitz):''}</span></span><span class="prog ${n>=i.sets?'done':''}">${n>=i.sets?'✓ ':''}${n}/${i.sets}</span></button>`;}).join(''):'<p class="mute">Dieser Tag hat noch keine Übungen. Füge sie im Plan hinzu.</p>');
+  $('freeList').innerHTML=DB.ex.map(e=>`<button class="item" style="min-height:48px" data-act="open" data-id="${e.id}"><span class="t" style="font-size:15px">${esc(e.name)}</span><span class="prog">${todaySets(e.id).length||''}</span></button>`).join('');
+}
+
+// ---------- Übung ----------
+function target(id){const d=curDay();const i=d&&d.items.find(x=>x.ex===id);if(i)return i;for(const p of DB.plan){const j=p.items.find(x=>x.ex===id);if(j)return j;}return null;}
+function lastSession(id){const prev=DB.sets.filter(s=>s.ex===id&&dstr(s.t)!==dstr(Date.now()));if(!prev.length)return null;const d=dstr(prev[prev.length-1].t);return prev.filter(s=>dstr(s.t)===d);}
+function suggest(id){
+  const t=target(id),l=lastSession(id);
+  if(!l)return{kg:t&&+t.kg?t.kg:'',text:t&&+t.kg?'Erstes Mal mit Plan-Gewicht.':'Noch keine Daten. Starte mit einem Gewicht, das du sauber schaffst.'};
+  const lk=Math.max(...l.map(s=>+s.kg||0));
+  const v=l.flatMap(s=>s.reps||[]).map(r=>r.mcv);const vb=v.length?Math.max(...v):0;
+  const ld=new Date(l[0].t).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+  const sum=`Letztes Mal (${ld}): ${l.map(s=>s.n).join(' / ')} Wdh. mit ${fmtKg(lk)} kg${vb?' · beste '+vb.toFixed(2)+' m/s':''}.`;
+  if(t&&l.length>=t.sets&&l.every(s=>s.n>=t.reps))return{kg:lk+2.5,text:sum+' Alles geschafft → heute +2,5 kg.',up:true};
+  return{kg:lk||'',text:sum+(t?' Ziel: '+t.sets+' × '+t.reps+' schaffen, dann steigern.':'')};
+}
+function setView(e){
+  if(editSet)return `<div class="row">${SF.map(([k,l])=>`<label>${l}<input data-xf="${e.id}:set.${k}" value="${esc(e.set[k])}"></label>`).join('')}</div><label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}" placeholder="z. B. Griffbreite, Fußposition"></label>`;
+  const f=SF.filter(([k])=>e.set[k]);
+  return (f.length?`<div class="kv">${f.map(([k,l])=>`<div><b>${esc(e.set[k])}</b><span>${l}</span></div>`).join('')}</div>`:'<p class="mute" style="margin:0">Noch nichts hinterlegt. Tippe auf „Bearbeiten“ und trag z. B. die Sitzhöhe ein.</p>')+(e.note?`<p style="margin:10px 0 0">${esc(e.note)}</p>`:'');
+}
+function renderEx(){
+  const e=exById(curEx);if(!e){show('vTrain');return;}
+  $('exName').textContent=e.name;
+  $('exSet').innerHTML=setView(e);
+  document.querySelector('[data-act=editSet]').textContent=editSet?'Fertig':'Bearbeiten';
+  const t=target(e.id),s=suggest(e.id),n=todaySets(e.id).length;
+  $('exPlan').innerHTML=`<h3>${t?'Heute: '+t.sets+' × '+t.reps+' Wdh.'+(+t.kg?' · Plan '+fmtKg(t.kg)+' kg':''):'Nicht im Plan'}</h3><p class="mute" style="margin:0">${n} ${n===1?'Satz':'Sätze'} heute erledigt</p><div class="tip">${esc(s.text)}</div>`;
+  renderToday();
+}
+function renderToday(){
+  const l=todaySets(curEx);
+  $('today').innerHTML='<h3>Heute</h3>'+(l.length?l.map((s,i)=>{const v=(s.reps||[]).map(r=>r.mcv);
+    return `<div class="rep" style="grid-template-columns:60px minmax(0,1fr) auto"><span class="mute">Satz ${i+1}</span><span>${s.n} Wdh. · ${fmtKg(s.kg)} kg</span><span class="v mute">${v.length?'Ø '+(v.reduce((a,c)=>a+c,0)/v.length).toFixed(2)+' m/s':'ohne Sensor'}</span></div>`;}).join(''):'<p class="mute" style="margin:0">Noch keine Sätze.</p>');
+}
+function addSet(o){
+  DB.sets.push({t:Date.now(),ex:curEx,kg:parseFloat($('kg').value)||0,day:DB.prefs.day||null,...o});save();renderEx();startRest();
+}
+
+// ---------- Plan ----------
+function renderPlan(){
+  const opts=sel=>DB.ex.map(e=>`<option value="${e.id}"${e.id===sel?' selected':''}>${esc(e.name)}</option>`).join('');
+  $('planEd').innerHTML=DB.plan.map((d,i)=>`<div class="card"><div class="row" style="margin-bottom:10px"><label>Name des Tages<input data-pf="${i}::name" value="${esc(d.name)}"></label><button class="small ghost" data-act="delDay" data-i="${i}">Löschen</button></div>
+    <div class="pi pih"><span>Übung</span><span>Sätze</span><span>Wdh.</span><span>kg</span><span></span></div>
+    ${d.items.map((x,j)=>`<div class="pi"><select data-pf="${i}:${j}:ex">${opts(x.ex)}</select><input type="number" inputmode="numeric" min="1" data-pf="${i}:${j}:sets" value="${x.sets}" placeholder="Sätze" aria-label="Sätze"><input type="number" inputmode="numeric" min="1" data-pf="${i}:${j}:reps" value="${x.reps}" placeholder="Wdh." aria-label="Wiederholungen"><input type="number" inputmode="decimal" step="0.5" min="0" data-pf="${i}:${j}:kg" value="${+x.kg||''}" placeholder="kg" aria-label="Gewicht"><button class="small ghost" data-act="delItem" data-i="${i}" data-j="${j}" aria-label="Entfernen" style="padding:0">✕</button></div>`).join('')}
+    <button class="small" data-act="addItem" data-i="${i}" style="margin-top:4px">+ Übung</button></div>`).join('');
+  $('restS').value=DB.prefs.rest;$('snd').checked=DB.prefs.snd!==false;
+}
+
+// ---------- Geräte ----------
+const linkFor=id=>location.origin+location.pathname+'?uebung='+id;
+function renderDev(){
+  $('devList').innerHTML=DB.ex.map(e=>`<details class="card"><summary>${esc(e.name)}${e.set.sitz?` <span class="mute">· Sitz ${esc(e.set.sitz)}</span>`:''}</summary>
+    <label style="margin-top:10px">Name<input data-xf="${e.id}:name" value="${esc(e.name)}"></label>
+    <div class="row" style="margin-top:10px">${SF.map(([k,l])=>`<label>${l}<input data-xf="${e.id}:set.${k}" value="${esc(e.set[k])}"></label>`).join('')}</div>
+    <label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}"></label>
+    <h3 style="margin-top:14px">Sensor</h3>
+    <div class="row"><label>Hebephase<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>Gewicht geht hoch</option><option value="-1"${e.dir==-1?' selected':''}>Gewicht geht runter</option></select></label>
+    <label>Min. Weg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
+    <h3 style="margin-top:14px">QR-Code / NFC fürs Gerät</h3><code>${esc(linkFor(e.id))}</code>
+    <div class="row" style="margin-top:8px"><button class="small" data-act="qr" data-id="${e.id}">QR-Code zeigen</button><button class="small" data-act="copyLink" data-id="${e.id}">Link kopieren</button><button class="small ghost" data-act="delEx" data-id="${e.id}">Übung löschen</button></div>
+    <div id="qr-${e.id}"></div></details>`).join('');
+}
+function loadQR(){return window.qrcode?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+
+// ---------- Verlauf ----------
+function renderHist(){
+  const h=$('hEx'),cur=h.value||curEx||DB.ex[0]?.id;
+  h.innerHTML=DB.ex.map(e=>`<option value="${e.id}"${e.id===cur?' selected':''}>${esc(e.name)}</option>`).join('');
+  const list=DB.sets.map((s,i)=>({...s,i})).filter(s=>s.ex===h.value).reverse().slice(0,40);
+  if(!list.length){$('hist').innerHTML='<p class="mute" style="margin:0">Noch keine Sätze für diese Übung.</p>';return;}
+  $('hist').innerHTML='<table><thead><tr><th>Datum</th><th>kg</th><th>Wdh.</th><th>Ø m/s</th><th>Abfall</th><th></th></tr></thead><tbody>'+list.map(s=>{
+    const v=(s.reps||[]).map(r=>r.mcv),b=v.length?Math.max(...v):0,d=new Date(s.t);
+    return `<tr><td>${d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</td><td>${fmtKg(s.kg)}</td><td>${s.n}</td><td>${v.length?(v.reduce((a,c)=>a+c,0)/v.length).toFixed(2):'–'}</td><td>${v.length>1?((b-v[v.length-1])/b*100).toFixed(0)+' %':'–'}</td><td><button class="small ghost" data-act="delSet" data-i="${s.i}" aria-label="Satz löschen">✕</button></td></tr>`;}).join('')+'</tbody></table>';
+}
+$('hEx').onchange=renderHist;
+
+// ---------- Eingaben (Plan, Geräte) ----------
+document.addEventListener('change',ev=>{
+  const t=ev.target;
+  if(t.dataset.xf){const [id,f]=t.dataset.xf.split(':');const e=exById(id);if(!e)return;
+    if(f.startsWith('set.'))e.set[f.slice(4)]=t.value.trim();else if(['dir','rom','loss'].includes(f))e[f]=+t.value||e[f];else e[f]=t.value.trim();
+    save();if(tab==='vDev'&&f==='name')renderDev();}
+  if(t.dataset.pf){const [i,j,f]=t.dataset.pf.split(':');const d=DB.plan[+i];if(!d)return;
+    if(j==='')d[f]=t.value.trim()||'Trainingstag';else{const x=d.items[+j];x[f]=f==='ex'?t.value:(+t.value||0);}save();}
+  if(t.id==='restS'){DB.prefs.rest=Math.max(0,+t.value||0);save();}
+  if(t.id==='snd'){DB.prefs.snd=t.checked;save();}
+});
+
+// ---------- Klicks ----------
+function sure(b){if(b.dataset.sure)return true;b.dataset.sure=1;b.textContent='Sicher?';return false;}
+document.addEventListener('click',async ev=>{
+  const b=ev.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  if(a==='tab'){tab=b.dataset.t;if(phase!=='idle')stopSet();show(tab);}
+  else if(a==='day'){DB.prefs.day=b.dataset.id;save();renderTrain();}
+  else if(a==='open')openEx(b.dataset.id);
+  else if(a==='back'){if(phase!=='idle')stopSet();show('vTrain');}
+  else if(a==='editSet'){editSet=!editSet;renderEx();}
+  else if(a==='manual'){const n=parseInt($('manN').value);if(!(n>0)){$('manN').focus();return;}addSet({n,reps:[]});$('manN').value='';}
+  else if(a==='addDay'){DB.plan.push({id:uid(),name:'Neuer Tag',items:[]});save();renderPlan();}
+  else if(a==='delDay'){if(!sure(b))return;DB.plan.splice(+b.dataset.i,1);save();renderPlan();}
+  else if(a==='addItem'){DB.plan[+b.dataset.i].items.push(it(DB.ex[0].id,3,10));save();renderPlan();}
+  else if(a==='delItem'){DB.plan[+b.dataset.i].items.splice(+b.dataset.j,1);save();renderPlan();}
+  else if(a==='addEx'){const e=mk(uid(),'Neue Übung',10,20);DB.ex.push(e);save();renderDev();const d=$('devList').lastElementChild;d.open=true;d.scrollIntoView({behavior:'smooth'});}
+  else if(a==='delEx'){if(!sure(b))return;const id=b.dataset.id;DB.ex=DB.ex.filter(e=>e.id!==id);DB.plan.forEach(d=>d.items=d.items.filter(x=>x.ex!==id));save();renderDev();}
+  else if(a==='qr'){const box=$('qr-'+b.dataset.id);try{await loadQR();const q=qrcode(0,'M');q.addData(linkFor(b.dataset.id));q.make();box.innerHTML=`<div class="qr">${q.createSvgTag(4,8)}</div><p class="mute">Screenshot machen, ausdrucken und ans Gerät kleben.</p>`;}catch(e){box.innerHTML='<p class="mute">QR-Code konnte nicht geladen werden (offline?). Nutze den Link mit einem QR-Generator.</p>';}}
+  else if(a==='copyLink'){navigator.clipboard?.writeText(linkFor(b.dataset.id)).then(()=>{b.textContent='Kopiert ✓';},()=>{});}
+  else if(a==='delSet'){if(!sure(b))return;DB.sets.splice(+b.dataset.i,1);save();renderHist();}
+  else if(a==='copy'){navigator.clipboard?.writeText(JSON.stringify(DB)).then(()=>{b.textContent='Kopiert ✓';},()=>{b.textContent='Nicht möglich';});}
+  else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
+  else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
+  else if(a==='rest30'){restEnd+=30000;}
+  else if(a==='restSkip'){restEnd=0;}
+});
+
+// ---------- Pausen-Timer ----------
+let restEnd=0;
+function startRest(){if(DB.prefs.rest>0)restEnd=Date.now()+DB.prefs.rest*1000;}
+setInterval(()=>{const r=restEnd-Date.now();const on=restEnd>0;$('rest').classList.toggle('hidden',!on);if(!on)return;
+  if(r<=0){restEnd=0;beep(988,250);setTimeout(()=>beep(988,250),350);return;}
+  const s=Math.ceil(r/1000);$('restT').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');},250);
+
+// ---------- Töne ----------
+let ac=null;
+function beep(f,ms){if(DB.prefs.snd===false||!ac)return;try{const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.15;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+ms/1000);}catch(e){}}
+
+// ---------- Sensor & Auswertung ----------
+let listening=false,phase='idle',calib=[],G=[0,0,9.81],gmag=9.81,dir=1,P=null;
+let af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
+function onMotion(e){
+  const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;cnt++;
+  const t=performance.now()/1000;
+  if(phase==='calib'){calib.push([a.x,a.y,a.z]);if(calib.length>=60)finishCalib();return;}
+  if(phase!=='run'){lastT=t;return;}
+  let dt=lastT?t-lastT:.016;lastT=t;if(dt<=0||dt>.1)dt=.016;
+  const proj=(a.x*G[0]+a.y*G[1]+a.z*G[2])/gmag-gmag; // vertikale Beschleunigung ohne Schwerkraft, + = hoch
+  af+=.35*(proj-af);
+  const r=e.rotationRate||{},rot=Math.hypot(r.alpha||0,r.beta||0,r.gamma||0);
+  stillT=(Math.abs(af)<.3&&rot<20)?stillT+dt:0;
+  v=(v+af*dir*dt)*.998;
+  if(stillT>.2)v=0;
+  if(!inRep&&v>.06){inRep=true;acc={t:0,sum:0,n:0,pk:0,d:0};}
+  if(inRep){acc.t+=dt;acc.sum+=v;acc.n++;acc.d+=v*dt;if(v>acc.pk)acc.pk=v;
+    if(v<=0||stillT>.2){inRep=false;v=0;if(acc.d*100>=P.rom&&acc.t>=.2)addRep({mcv:acc.sum/acc.n,pv:acc.pk,rom:acc.d,dur:acc.t});}}
+  trace.push(v);if(trace.length>420)trace.shift();
+}
+function finishCalib(){
+  const n=calib.length,m=[0,1,2].map(i=>calib.reduce((s,c)=>s+c[i],0)/n);
+  const sd=Math.sqrt(calib.reduce((s,c)=>s+(c[0]-m[0])**2+(c[1]-m[1])**2+(c[2]-m[2])**2,0)/n);
+  if(sd>.25){calib=[];status('Zu viel Bewegung – Handy ruhig halten …','warn');return;}
+  G=m;gmag=Math.hypot(...m);phase='run';af=0;v=0;lastT=0;stillT=0;inRep=false;trace=[];
+  status('Los! Wiederholungen werden erkannt.','ok');beep(880,120);
+}
+function addRep(r){
+  reps.push(r);
+  const best=Math.max(...reps.map(x=>x.mcv)),loss=Math.max(0,(best-r.mcv)/best*100),t=target(curEx);
+  $('nReps').textContent=reps.length;$('lastV').textContent=r.mcv.toFixed(2);$('loss').textContent=reps.length>1?loss.toFixed(0):'0';
+  const over=reps.length>1&&loss>=P.loss;
+  $('loss').style.color=over?'var(--bad)':loss>=P.loss*.7?'var(--warn)':'';
+  if(over&&!alerted){alerted=true;status('Geschwindigkeit −'+loss.toFixed(0)+' % → Satz beenden','bad');beep(330,600);}
+  else if(t&&reps.length===t.reps&&!alerted){status('Ziel von '+t.reps+' Wdh. erreicht ✓','ok');beep(1320,200);}
+  else beep(1320,60);
+  renderReps();
+}
+function renderReps(){
+  if(!reps.length){$('reps').innerHTML='';return;}
+  const best=Math.max(...reps.map(x=>x.mcv),.01);
+  $('reps').innerHTML=reps.map((r,i)=>{const l=(best-r.mcv)/best*100,c=l>=P.loss?'var(--bad)':l>=P.loss*.7?'var(--warn)':'var(--ok)';
+    return `<div class="rep"><span class="mute">${i+1}</span><div class="bar" style="width:${(r.mcv/best*100).toFixed(0)}%;background:${c}"></div><span class="v">${r.mcv.toFixed(2)} m/s</span></div>`;}).join('');
+}
+function status(t,c){const s=$('status');s.textContent=t;s.className=c||'mute';}
+function resetLive(){reps=[];trace=[];$('nReps').textContent='0';$('lastV').textContent='–';$('loss').textContent='–';$('loss').style.color='';renderReps();status('Handy fest am Gewicht befestigen, dann Satz starten.');}
+async function enableSensor(){
+  if(listening)return true;
+  try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+    const r=await DeviceMotionEvent.requestPermission();if(r!=='granted'){status('Zugriff auf Bewegungssensoren abgelehnt.','bad');return false;}}}
+  catch(e){status('Sensorfreigabe nicht möglich (https?).','bad');return false;}
+  window.addEventListener('devicemotion',onMotion);listening=true;
+  setInterval(()=>{const n=performance.now();$('rate').textContent=cnt?'Sensor '+Math.round(cnt*1000/(n-rateT))+' Hz':'';cnt=0;rateT=n;},1000);
+  return true;
+}
+function stopSet(){
+  phase='idle';$('go').textContent='Satz mit Sensor starten';$('go').classList.remove('stop');
+  try{wake?.release();}catch(e){}
+  if(reps.length){addSet({n:reps.length,reps:reps.map(r=>({mcv:+r.mcv.toFixed(3),pv:+r.pv.toFixed(3),rom:+r.rom.toFixed(3),dur:+r.dur.toFixed(2)}))});status('Satz gespeichert ('+reps.length+' Wdh.)','ok');}
+  else status('Keine Wiederholungen erkannt. Tipp: Unter „Geräte“ den Mindestweg verringern.','warn');
+}
+$('go').onclick=async()=>{
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();}catch(e){}
+  if(phase!=='idle'){stopSet();return;}
+  if(!await enableSensor())return;
+  P=exById(curEx);dir=P.dir;resetLive();alerted=false;calib=[];restEnd=0;phase='calib';
+  status('Kalibriere … Handy 1 Sekunde ruhig halten','warn');
+  $('go').textContent='Satz beenden';$('go').classList.add('stop');
+  try{wake=await navigator.wakeLock?.request('screen');}catch(e){}
+};
+
+// ---------- Live-Kurve ----------
+const cv=$('cv'),cx=cv.getContext('2d');
+function draw(){
+  if(!$('vEx').classList.contains('hidden')){
+    const W=cv.clientWidth,H=cv.clientHeight,d=devicePixelRatio||1;
+    if(cv.width!==W*d||cv.height!==H*d){cv.width=W*d;cv.height=H*d;}
+    cx.setTransform(d,0,0,d,0,0);cx.clearRect(0,0,W,H);
+    const max=1.2,y=q=>H/2-q/max*(H/2-6);
+    cx.strokeStyle='#2b3039';cx.lineWidth=1;cx.beginPath();cx.moveTo(0,y(0));cx.lineTo(W,y(0));cx.stroke();
+    cx.fillStyle='#8d95a3';cx.font='11px system-ui';cx.fillText('+'+max+' m/s',4,12);
+    if(trace.length>1){cx.strokeStyle='#ff6a2b';cx.lineWidth=2.5;cx.beginPath();
+      trace.forEach((q,i)=>{const X=W-(trace.length-1-i)*(W/420),Y=y(Math.max(-max,Math.min(max,q)));i?cx.lineTo(X,Y):cx.moveTo(X,Y);});cx.stroke();}
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---------- Start ----------
+const q=new URLSearchParams(location.search).get('uebung');
+if(q&&exById(q))openEx(q);else show('vTrain');
+}
+</script>
+</body>
+</html>

@@ -80,7 +80,7 @@ details>summary::after{content:" ▾";color:var(--mute)}
 </head>
 <body>
 <main>
-<header><h1>Gym<b>Pilot</b></h1><span class="mute" id="rate"></span></header>
+<header><h1>Gym<b>Pilot</b> <span class="mute" style="font-size:12px;font-weight:400">Version 2.5</span></h1><span class="mute" id="rate"></span></header>
 <div class="hint hidden" id="secure">Die Bewegungssensoren funktionieren nur, wenn die Seite über <b>https://</b> geöffnet ist. Plan und Einstellungen gehen trotzdem.</div>
 
 <!-- TRAINING -->
@@ -318,7 +318,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
   else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
   else if(a==='kgm'||a==='kgp'){const k=parseFloat($('kg').value)||0;$('kg').value=Math.max(0,k+(a==='kgp'?2.5:-2.5));}
-  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
+  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot 2.5 Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
     navigator.clipboard?.writeText(txt).then(()=>{b.textContent='Kopiert ✓ ('+lastRaw.rows.length+' Messwerte) – jetzt im Chat einfügen';},()=>{b.textContent='Kopieren nicht möglich';});}
   else if(a==='rest30'){restEnd+=30000;}
   else if(a==='restSkip'){restEnd=0;}

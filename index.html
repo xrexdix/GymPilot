@@ -80,7 +80,7 @@ details>summary::after{content:" ▾";color:var(--mute)}
 </head>
 <body>
 <main>
-<header><h1>Gym<b>Pilot</b> <span class="mute" style="font-size:12px;font-weight:400">Version 2.7</span></h1><span class="mute" id="rate"></span></header>
+<header><h1>Gym<b>Pilot</b> <span class="mute" style="font-size:12px;font-weight:400">Version 2.8</span></h1><span class="mute" id="rate"></span></header>
 <div class="hint hidden" id="secure">Die Bewegungssensoren funktionieren nur, wenn die Seite über <b>https://</b> geöffnet ist. Plan und Einstellungen gehen trotzdem.</div>
 
 <!-- TRAINING -->
@@ -318,7 +318,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
   else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
   else if(a==='kgm'||a==='kgp'){const k=parseFloat($('kg').value)||0;$('kg').value=Math.max(0,k+(a==='kgp'?2.5:-2.5));}
-  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot 2.7 Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
+  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot 2.8 Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
     navigator.clipboard?.writeText(txt).then(()=>{b.textContent='Kopiert ✓ ('+lastRaw.rows.length+' Messwerte) – jetzt im Chat einfügen';},()=>{b.textContent='Kopieren nicht möglich';});}
   else if(a==='rest30'){restEnd+=30000;}
   else if(a==='restSkip'){restEnd=0;}
@@ -337,7 +337,7 @@ function beep(f,ms){if(DB.prefs.snd===false||!ac)return;try{const o=ac.createOsc
 
 // ---------- Sensor & Auswertung ----------
 let listening=false,phase='idle',calib=[],G=[0,0,9.81],gmag=9.81,dir=1,P=null;
-let B=[0,0,0],calL=[],C=[0,0,0,0,0,0],U=[.577,.577,.577],signSet=false,vtmp=0,raw=[],lastRaw=null,pre=[],sgn=1,rb=[],seg=[],pk=0,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
+let B=[0,0,0],calL=[],C=[0,0,0,0,0,0],U=[.577,.577,.577],signSet=false,vtmp=0,raw=[],lastRaw=null,segT0=0,pre=[],sgn=1,rb=[],seg=[],pk=0,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
 function onMotion(e){
   const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;cnt++;
   const t=performance.now()/1000;
@@ -367,7 +367,7 @@ function onMotion(e){
   const r=e.rotationRate||{},rot=Math.hypot(r.alpha||0,r.beta||0,r.gamma||0);
   // Ruhe-Erkennung: kaum Beschleunigung und Drehung. Langsame, gleichmäßige Bewegung sieht genauso aus –
   // darum wird während einer Wiederholung nie zurückgesetzt.
-  stillT=(Math.hypot(lx,ly,lz)<.2&&rot<12)?stillT+dt:0;
+  stillT=((Math.hypot(lx,ly,lz)<.2||Math.abs(af)<.1)&&rot<15)?stillT+dt:0;
   const sa=af;
   // Erkennung mit "leckendem" Integrator (Zeitkonstante 2,5 s): Drift kann sich nicht aufschaukeln
   v=(v+sa*dt)*(1-dt/2.5);
@@ -381,16 +381,18 @@ function onMotion(e){
       else if(stillT>.5){reps[reps.length-1].down=Math.max(.2,t-stillT-ecc.t0+.15);ecc=null;atTop=false;v=0;pos=0;renderReps();}}
     else{if(stillT>.35){v=0;if(!atTop)pos=0;}}
   }
-  if(!inRep&&v>.04){inRep=true;pos=0;if(tStart==null)tStart=t;
+  if(!inRep&&v>.05&&stillT<.1){inRep=true;pos=0;if(tStart==null)tStart=t;
     // Beginn der Hebephase zurückverfolgen: ab dem letzten Moment ohne Aufwärtsbewegung
-    let k=rb.length-1;while(k>0&&rb[k-1].v>.01)k--;seg=rb.slice(k);pk=0;
+    let k=rb.length-1;while(k>0&&rb[k-1].v>.01)k--;seg=rb.slice(k);pk=0;segT0=t;
     if(ecc){reps[reps.length-1].down=t-ecc.t0;ecc=null;renderReps();}}
   else if(inRep)seg.push(rb[rb.length-1]);
   pos=Math.max(0,pos+v*dt);
   if(inRep){if(v>pk)pk=v;const T=seg.reduce((x,q)=>x+q.dt,0);
+    // Schleichende Drift in Ruhe (z. B. Gewicht liegt unten): nach 2 s kaum Tempo und Weg -> keine Wiederholung
+    if(t-segT0>2&&pk<.1){inRep=false;v=0;pos=0;seg=[];}
     // Ende: Bewegung kehrt um, oder oben längere Pause, oder Sicherheitsgrenze 8 s
-    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r0=measure(seg),sc=P.scale||1,r=r0&&{mcv:r0.mcv*sc,pv:r0.pv*sc,rom:r0.rom*sc,dur:r0.dur},ref=romRef();if(r&&r.rom*100>=P.rom&&r.rom>=.5*ref&&r.dur>=.25)addRep({...r,down:0});}}
-  hist.push({t,p:pos});if(hist.length>800)hist.shift();
+    if(inRep&&(v< -.02||(stillT>.25&&v<.35*pk)||T>8)){inRep=false;v=0;stillT=0;atTop=true;const r0=measure(seg),sc=P.scale||1,r=r0&&{mcv:r0.mcv*sc,pv:r0.pv*sc,rom:r0.rom*sc,dur:r0.dur},ref=romRef();if(r&&r.rom*100>=P.rom&&r.rom>=.5*ref&&r.dur>=.25)addRep({...r,down:0});}}
+  hist.push({t,p:pos<.03?0:pos}); // kleine Wackler am Ruhepunkt nicht als Bewegung zeigenif(hist.length>800)hist.shift();
   trace.push(v);if(trace.length>420)trace.shift();
 }
 // Genaue Messung einer Hebephase: Beschleunigung integrieren und Drift so entfernen,

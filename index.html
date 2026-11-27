@@ -260,7 +260,7 @@ function renderDev(){
     <div class="row" style="margin-top:10px">${SF.map(([k,l])=>`<label>${l}<input data-xf="${e.id}:set.${k}" value="${esc(e.set[k])}"></label>`).join('')}</div>
     <label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}"></label>
     <h3 style="margin-top:14px">Sensor</h3>
-    <div class="row"><label>Erste Bewegung im Satz<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>Hebephase (Geräte)</option><option value="-1"${e.dir==-1?' selected':''}>Absenkphase (z. B. Bankdrücken aus der Ablage)</option></select></label>
+    <div class="row"><label>Hebephase bewegt das Handy<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>nach oben (Gewichtsstapel, Hantel)</option><option value="-1"${e.dir==-1?' selected':''}>nach unten (z. B. Griff beim Latzug)</option><option value="0"${e.dir==0?' selected':''}>waagerecht / automatisch</option></select></label>
     <label>Min. Weg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
     <div class="row" style="margin-top:10px"><label>Tempo hoch (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:tu" value="${e.tu??2}"></label><label>Tempo runter (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:td" value="${e.td??2}"></label></div>
     <h3 style="margin-top:14px">QR-Code / NFC fürs Gerät</h3><code>${esc(linkFor(e.id))}</code>
@@ -285,7 +285,7 @@ $('hEx').onchange=renderHist;
 document.addEventListener('change',ev=>{
   const t=ev.target;
   if(t.dataset.xf){const [id,f]=t.dataset.xf.split(':');const e=exById(id);if(!e)return;
-    if(f.startsWith('set.'))e.set[f.slice(4)]=t.value.trim();else if(['dir','rom','loss','tu','td'].includes(f))e[f]=+t.value||e[f]||2;else e[f]=t.value.trim();
+    if(f.startsWith('set.'))e.set[f.slice(4)]=t.value.trim();else if(f==='dir')e.dir=+t.value;else if(['rom','loss','tu','td'].includes(f))e[f]=+t.value||e[f]||2;else e[f]=t.value.trim();
     save();if(tab==='vDev'&&f==='name')renderDev();}
   if(t.dataset.pf){const [i,j,f]=t.dataset.pf.split(':');const d=DB.plan[+i];if(!d)return;
     if(j==='')d[f]=t.value.trim()||'Trainingstag';else{const x=d.items[+j];x[f]=f==='ex'?t.value:(+t.value||0);}save();}
@@ -351,17 +351,25 @@ function onMotion(e){
   const k=reps.length<2?.02:.006;
   C[0]+=k*(lx*lx-C[0]);C[1]+=k*(ly*ly-C[1]);C[2]+=k*(lz*lz-C[2]);C[3]+=k*(lx*ly-C[3]);C[4]+=k*(lx*lz-C[4]);C[5]+=k*(ly*lz-C[5]);
   for(let i=0;i<2;i++){const u=[C[0]*U[0]+C[3]*U[1]+C[4]*U[2],C[3]*U[0]+C[1]*U[1]+C[5]*U[2],C[4]*U[0]+C[5]*U[1]+C[2]*U[2]];const m=Math.hypot(...u);if(m>1e-9)U=u.map(x=>x/m);}
+  // 3) Richtung: Schwerkraftanteil (aIG minus Bewegung) zeigt, wo "oben" ist. iPhone und Android liefern
+  //    beide Werte in derselben Konvention, daher gilt: Beschleunigung nach oben = Skalarprodukt mit gp > 0.
+  let gx=G[0],gy=G[1],gz=G[2];if(L&&L.x!=null){gx=a.x-L.x;gy=a.y-L.y;gz=a.z-L.z;}
+  const gm=Math.hypot(gx,gy,gz)||1,cv=(U[0]*gx+U[1]*gy+U[2]*gz)/gm;
+  if(dir!==0&&Math.abs(cv)>.5){if(cv<0)U=U.map(x=>-x);if(!signSet){signSet=true;v=0;}}
   let aa=lx*U[0]+ly*U[1]+lz*U[2];
-  // 3) Richtung festlegen: die erste deutliche Bewegung im Satz zählt als positiv
+  // Waagerechte Bewegung oder "automatisch": die erste deutliche Bewegung im Satz zählt als Hebephase
   if(!signSet){vtmp=(vtmp+aa*dt)*.99;
-    if(Math.abs(vtmp)>.05){if(vtmp<0){U=U.map(x=>-x);vtmp=-vtmp;}signSet=true;v=vtmp*dir;af=0;}else aa=0;}
+    if(Math.abs(vtmp)>.05){if(vtmp<0){U=U.map(x=>-x);vtmp=-vtmp;}signSet=true;v=vtmp;af=0;}else aa=0;}
   if(!signSet)aa=0;
   af+=.35*(aa-af);
   const r=e.rotationRate||{},rot=Math.hypot(r.alpha||0,r.beta||0,r.gamma||0);
   // Ruhe-Erkennung: kaum Beschleunigung und Drehung. Langsame, gleichmäßige Bewegung sieht genauso aus –
   // darum wird während einer Wiederholung nie zurückgesetzt.
   stillT=(Math.hypot(lx,ly,lz)<.2&&rot<12)?stillT+dt:0;
-  v+=af*dir*dt;
+  const sa=af*(dir===-1&&Math.abs(cv)>.5?-1:1);
+  // Erkennung mit "leckendem" Integrator (Zeitkonstante 2,5 s): Drift kann sich nicht aufschaukeln
+  v=(v+sa*dt)*(1-dt/2.5);
+  rb.push({dt,a:sa,v});if(rb.length>150)rb.shift();
   // Schutz gegen Drift: unmögliche Werte oder ewig lange Absenkphase -> neu ansetzen
   if(!inRep&&(v<-2.5||(ecc&&t-ecc.t0>Math.max(6,3*(P.td??2))))){v=0;ecc=null;pos=0;atTop=false;}
   if(!inRep){
@@ -369,16 +377,29 @@ function onMotion(e){
     if(ecc){ecc.vm=Math.min(ecc.vm,v);
       if(ecc.vm<-.05&&v>-.01){reps[reps.length-1].down=t-ecc.t0;ecc=null;atTop=false;pos=0;v=0;renderReps();}
       else if(stillT>.5){reps[reps.length-1].down=Math.max(.2,t-stillT-ecc.t0+.15);ecc=null;atTop=false;v=0;pos=0;renderReps();}}
-    else{v*=.995;if(stillT>.35){v=0;if(!atTop)pos=0;}}
+    else{if(stillT>.35){v=0;if(!atTop)pos=0;}}
   }
-  if(!inRep&&v>.04){inRep=true;acc={t:0,sum:0,n:0,pk:0,d:0};pos=0;if(tStart==null)tStart=t;
+  if(!inRep&&v>.04){inRep=true;pos=0;if(tStart==null)tStart=t;
+    // Beginn der Hebephase zurückverfolgen: ab dem letzten Moment ohne Aufwärtsbewegung
+    let k=rb.length-1;while(k>0&&rb[k-1].v>.01)k--;seg=rb.slice(k);pk=0;
     if(ecc){reps[reps.length-1].down=t-ecc.t0;ecc=null;renderReps();}}
+  else if(inRep)seg.push(rb[rb.length-1]);
   pos=Math.max(0,pos+v*dt);
-  if(inRep){acc.t+=dt;acc.sum+=Math.max(v,0);acc.n++;acc.d+=Math.max(v,0)*dt;if(v>acc.pk)acc.pk=v;if(v>.06*acc.pk){acc.tl=acc.t;acc.nl=acc.n;acc.sl=acc.sum;}
+  if(inRep){if(v>pk)pk=v;const T=seg.reduce((x,q)=>x+q.dt,0);
     // Ende: Bewegung kehrt um, oder oben längere Pause, oder Sicherheitsgrenze 8 s
-    if(v< -.02||(stillT>.25&&v<.35*acc.pk)||acc.t>8){inRep=false;v=0;stillT=0;atTop=true;if(acc.d*100>=P.rom&&acc.tl>=.25)addRep({mcv:acc.sl/acc.nl,pv:acc.pk,rom:acc.d,dur:acc.tl,down:0});}}
+    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r=measure(seg);if(r&&r.rom*100>=P.rom&&r.dur>=.25)addRep({...r,down:0});}}
   hist.push({t,p:pos});if(hist.length>800)hist.shift();
   trace.push(v);if(trace.length>420)trace.shift();
+}
+// Genaue Messung einer Hebephase: Beschleunigung integrieren und Drift so entfernen,
+// dass die Geschwindigkeit am Anfang und am Ende (Umkehrpunkte) null ist.
+function measure(sg){
+  if(sg.length<5)return null;let T=0,vi=0;const arr=[];
+  for(const q of sg){vi+=q.a*q.dt;T+=q.dt;arr.push([T,vi,q.dt]);}
+  const dr=vi/T;let p=0;const vc=arr.map(([tt,x])=>{const y=x-dr*tt;if(y>p)p=y;return y;});
+  let i0=vc.findIndex(y=>y>.1*p),i1=vc.length-1;while(i1>i0&&vc[i1]<.1*p)i1--;
+  if(i0<0||p<=0)return null;let d=0,dur=0;for(let i=i0;i<=i1;i++){d+=Math.max(vc[i],0)*arr[i][2];dur+=arr[i][2];}
+  return{mcv:d/dur,pv:p,rom:d,dur};
 }
 window.gpDebug=()=>({raw,U,B,signSet});
 function finishCalib(){
@@ -408,7 +429,7 @@ function renderReps(){
     return `<div class="rep"><span class="mute">${i+1}</span><div class="bar" style="width:${(r.mcv/best*100).toFixed(0)}%;background:${c}"></div>${tt}<span class="v">${r.mcv.toFixed(2)} m/s</span></div>`;}).join('');
 }
 function status(t,c){const s=$('status');s.textContent=t;s.className=c||'mute';}
-function resetLive(){reps=[];trace=[];hist=[];pos=0;atTop=false;tStart=null;ecc=null;setT0=0;updRing();$('nReps').textContent='0';$('lastV').textContent='–';$('loss').textContent='–';$('loss').style.color='';renderReps();status('Handy fest am Gewicht befestigen, dann Satz starten.');}
+function resetLive(){reps=[];trace=[];hist=[];pos=0;atTop=false;rb=[];seg=[];pk=0;tStart=null;ecc=null;setT0=0;updRing();$('nReps').textContent='0';$('lastV').textContent='–';$('loss').textContent='–';$('loss').style.color='';renderReps();status('Handy fest am Gewicht befestigen, dann Satz starten.');}
 async function enableSensor(){
   if(listening)return true;
   try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
@@ -429,7 +450,7 @@ $('go').onclick=async()=>{
   try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();}catch(e){}
   if(phase!=='idle'){stopSet();return;}
   if(!await enableSensor())return;
-  P=exById(curEx);dir=P.dir;resetLive();raw=[];alerted=false;calib=[];restEnd=0;phase='calib';
+  P=exById(curEx);dir=+P.dir;resetLive();raw=[];alerted=false;calib=[];restEnd=0;phase='calib';
   status('Kalibriere … Handy 1 Sekunde ruhig halten','warn');
   $('go').textContent='Satz beenden';$('go').classList.add('stop');
   try{wake=await navigator.wakeLock?.request('screen');}catch(e){}

@@ -80,7 +80,7 @@ details>summary::after{content:" ▾";color:var(--mute)}
 </head>
 <body>
 <main>
-<header><h1>Gym<b>Pilot</b> <span class="mute" style="font-size:12px;font-weight:400">Version 2.5</span></h1><span class="mute" id="rate"></span></header>
+<header><h1>Gym<b>Pilot</b> <span class="mute" style="font-size:12px;font-weight:400">Version 2.6</span></h1><span class="mute" id="rate"></span></header>
 <div class="hint hidden" id="secure">Die Bewegungssensoren funktionieren nur, wenn die Seite über <b>https://</b> geöffnet ist. Plan und Einstellungen gehen trotzdem.</div>
 
 <!-- TRAINING -->
@@ -263,7 +263,7 @@ function renderDev(){
     <label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}"></label>
     <h3 style="margin-top:14px">Sensor</h3>
     <div class="row"><label>Bewegung<select data-xf="${e.id}:dir"><option value="1"${e.dir!=0?' selected':''}>senkrecht (Gewichtsstapel, Hantel, Latzug)</option><option value="0"${e.dir==0?' selected':''}>waagerecht (z. B. Griff der Brustpresse)</option></select></label>
-    <label>Mindestweg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"><span>${e.romHist&&e.romHist.length?'Gelernt: typisch '+[...e.romHist].sort((a,b)=>a-b)[Math.floor(e.romHist.length/2)]+' cm':'Typischer Weg wird beim Training gelernt'}</span></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
+    <label>Mindestweg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"><span>${e.romHist&&e.romHist.length?'Gelernt: typisch '+[...e.romHist].sort((a,b)=>a-b)[Math.floor(e.romHist.length/2)]+' cm':'Typischer Weg wird beim Training gelernt'}</span></label><label>Echter Weg (cm) zum Abgleichen<input type="number" inputmode="numeric" data-xf="${e.id}:realrom" placeholder="z. B. 45"><span>${e.scale&&e.scale!==1?'Korrektur aktiv: ×'+e.scale.toFixed(2):(e.romHist&&e.romHist.length?'Gemessenen Weg mit Zollstock prüfen und hier eintragen':'Erst einen Satz machen, dann abgleichen')}</span></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
     <div class="row" style="margin-top:10px"><label>Tempo hoch (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:tu" value="${e.tu??2}"></label><label>Tempo runter (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:td" value="${e.td??2}"></label></div>
     <h3 style="margin-top:14px">QR-Code / NFC fürs Gerät</h3><code>${esc(linkFor(e.id))}</code>
     <div class="row" style="margin-top:8px"><button class="small" data-act="qr" data-id="${e.id}">QR-Code zeigen</button><button class="small" data-act="copyLink" data-id="${e.id}">Link kopieren</button><button class="small ghost" data-act="delEx" data-id="${e.id}">Übung löschen</button></div>
@@ -287,7 +287,7 @@ $('hEx').onchange=renderHist;
 document.addEventListener('change',ev=>{
   const t=ev.target;
   if(t.dataset.xf){const [id,f]=t.dataset.xf.split(':');const e=exById(id);if(!e)return;
-    if(f.startsWith('set.'))e.set[f.slice(4)]=t.value.trim();else if(f==='dir')e.dir=+t.value;else if(['rom','loss','tu','td'].includes(f))e[f]=+t.value||e[f]||2;else e[f]=t.value.trim();
+    if(f.startsWith('set.'))e.set[f.slice(4)]=t.value.trim();else if(f==='dir')e.dir=+t.value;else if(f==='realrom'){const val=+t.value,h=e.romHist||[];if(val>0&&h.length){const typ=[...h].sort((a,b)=>a-b)[Math.floor(h.length/2)];const k=val/typ;e.scale=(e.scale||1)*k;e.romHist=h.map(x=>Math.round(x*k));DB.sets.filter(q=>q.ex===e.id).forEach(q=>(q.reps||[]).forEach(r=>{r.rom=+(r.rom*k).toFixed(3);r.mcv=+(r.mcv*k).toFixed(3);r.pv=+(r.pv*k).toFixed(3);}));}save();renderDev();return;}else if(['rom','loss','tu','td'].includes(f))e[f]=+t.value||e[f]||2;else e[f]=t.value.trim();
     save();if(tab==='vDev'&&f==='name')renderDev();}
   if(t.dataset.pf){const [i,j,f]=t.dataset.pf.split(':');const d=DB.plan[+i];if(!d)return;
     if(j==='')d[f]=t.value.trim()||'Trainingstag';else{const x=d.items[+j];x[f]=f==='ex'?t.value:(+t.value||0);}save();}
@@ -318,7 +318,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='dl'){const bl=new Blob([JSON.stringify(DB,null,1)],{type:'application/json'});const l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download='gympilot-'+new Date().toISOString().slice(0,10)+'.json';l.click();}
   else if(a==='import'){try{const d=JSON.parse($('imp').value);if(!Array.isArray(d.ex)||!Array.isArray(d.sets)||!Array.isArray(d.plan))throw 0;if(!sure(b))return;DB=d;save();$('imp').value='';b.textContent='Importiert ✓';renderHist();}catch(e){b.textContent='Ungültige Daten';}}
   else if(a==='kgm'||a==='kgp'){const k=parseFloat($('kg').value)||0;$('kg').value=Math.max(0,k+(a==='kgp'?2.5:-2.5));}
-  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot 2.5 Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
+  else if(a==='raw'){if(!lastRaw)return;const txt='GymPilot 2.6 Rohdaten | Übung '+lastRaw.ex+' | erkannt '+lastRaw.n+' Wdh. | '+lastRaw.ua+'\nt_ms,ax,ay,az,rotA,rotB,rotG,lauf,v,inRep,lx,ly,lz,af\n'+lastRaw.rows.map(r=>r.join(',')).join('\n');
     navigator.clipboard?.writeText(txt).then(()=>{b.textContent='Kopiert ✓ ('+lastRaw.rows.length+' Messwerte) – jetzt im Chat einfügen';},()=>{b.textContent='Kopieren nicht möglich';});}
   else if(a==='rest30'){restEnd+=30000;}
   else if(a==='restSkip'){restEnd=0;}
@@ -389,7 +389,7 @@ function onMotion(e){
   pos=Math.max(0,pos+v*dt);
   if(inRep){if(v>pk)pk=v;const T=seg.reduce((x,q)=>x+q.dt,0);
     // Ende: Bewegung kehrt um, oder oben längere Pause, oder Sicherheitsgrenze 8 s
-    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r=measure(seg),ref=romRef();if(r&&r.rom*100>=P.rom&&r.rom>=.5*ref&&r.dur>=.25)addRep({...r,down:0});}}
+    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r0=measure(seg),sc=P.scale||1,r=r0&&{mcv:r0.mcv*sc,pv:r0.pv*sc,rom:r0.rom*sc,dur:r0.dur},ref=romRef();if(r&&r.rom*100>=P.rom&&r.rom>=.5*ref&&r.dur>=.25)addRep({...r,down:0});}}
   hist.push({t,p:pos});if(hist.length>800)hist.shift();
   trace.push(v);if(trace.length>420)trace.shift();
 }

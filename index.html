@@ -166,7 +166,7 @@ const SF=[['sitz','Sitzhöhe'],['lehne','Rückenlehne'],['polster','Polster'],['
 const mk=(id,name,rom,loss)=>({id,name,dir:1,rom,loss,set:{sitz:'',lehne:'',polster:'',griff:''},note:''});
 const DEF_EX=[mk('latzug','Latzug',15,20),mk('brustpresse','Brustpresse',15,20),mk('beinpresse','Beinpresse',10,20),mk('rudern','Rudern am Kabel',15,20),
   mk('schulterpresse','Schulterpresse',15,20),mk('beinstrecker','Beinstrecker',10,25),mk('beinbeuger','Beinbeuger',10,25),
-  mk('kniebeuge','Kniebeuge (Langhantel)',20,20),mk('bankdruecken','Bankdrücken (Langhantel)',15,20),mk('curl','Bizepscurl',15,25)];
+  mk('curl-kh','Bizepscurl (Kurzhantel)',15,25),mk('kniebeuge','Kniebeuge (Langhantel)',20,20),mk('bankdruecken','Bankdrücken (Langhantel)',15,20),mk('curl','Bizepscurl',15,25)];
 const it=(ex,sets,reps)=>({ex,sets,reps,kg:0});
 const DEF_PLAN=[{id:'a',name:'Tag A – Drücken',items:[it('brustpresse',3,10),it('schulterpresse',3,10),it('bankdruecken',3,8)]},
   {id:'b',name:'Tag B – Ziehen',items:[it('latzug',3,10),it('rudern',3,10),it('curl',3,12)]},
@@ -179,6 +179,8 @@ if(!DB||!Array.isArray(DB.ex)){
   DB={v:2,ex:DEF_EX,plan:DEF_PLAN,sets:[],prefs:{rest:90,snd:true,day:'a'}};
   try{const o=JSON.parse(localStorage.getItem('repspeed.v1'));if(o&&o.sets)DB.sets=o.sets.map(s=>({...s,n:s.reps.length}));}catch(e){}
 }
+// Neue Standard-Übungen auch bei bestehenden Daten ergänzen
+for(const d of DEF_EX)if(!DB.ex.some(e=>e.id===d.id))DB.ex.push(JSON.parse(JSON.stringify(d)));
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}};
 const exById=id=>DB.ex.find(e=>e.id===id);
 const curDay=()=>DB.plan.find(d=>d.id===DB.prefs.day);
@@ -260,8 +262,8 @@ function renderDev(){
     <div class="row" style="margin-top:10px">${SF.map(([k,l])=>`<label>${l}<input data-xf="${e.id}:set.${k}" value="${esc(e.set[k])}"></label>`).join('')}</div>
     <label style="margin-top:10px">Notiz<input data-xf="${e.id}:note" value="${esc(e.note)}"></label>
     <h3 style="margin-top:14px">Sensor</h3>
-    <div class="row"><label>Hebephase bewegt das Handy<select data-xf="${e.id}:dir"><option value="1"${e.dir==1?' selected':''}>nach oben (Gewichtsstapel, Hantel)</option><option value="-1"${e.dir==-1?' selected':''}>nach unten (z. B. Griff beim Latzug)</option><option value="0"${e.dir==0?' selected':''}>waagerecht / automatisch</option></select></label>
-    <label>Min. Weg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
+    <div class="row"><label>Bewegung<select data-xf="${e.id}:dir"><option value="1"${e.dir!=0?' selected':''}>senkrecht (Gewichtsstapel, Hantel, Latzug)</option><option value="0"${e.dir==0?' selected':''}>waagerecht (z. B. Griff der Brustpresse)</option></select></label>
+    <label>Mindestweg (cm)<input type="number" inputmode="numeric" data-xf="${e.id}:rom" value="${e.rom}"><span>${e.romHist&&e.romHist.length?'Gelernt: typisch '+[...e.romHist].sort((a,b)=>a-b)[Math.floor(e.romHist.length/2)]+' cm':'Typischer Weg wird beim Training gelernt'}</span></label><label>Satz-Stopp bei Abfall (%)<input type="number" inputmode="numeric" data-xf="${e.id}:loss" value="${e.loss}"></label></div>
     <div class="row" style="margin-top:10px"><label>Tempo hoch (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:tu" value="${e.tu??2}"></label><label>Tempo runter (s)<input type="number" inputmode="decimal" step="0.5" min="0.5" data-xf="${e.id}:td" value="${e.td??2}"></label></div>
     <h3 style="margin-top:14px">QR-Code / NFC fürs Gerät</h3><code>${esc(linkFor(e.id))}</code>
     <div class="row" style="margin-top:8px"><button class="small" data-act="qr" data-id="${e.id}">QR-Code zeigen</button><button class="small" data-act="copyLink" data-id="${e.id}">Link kopieren</button><button class="small ghost" data-act="delEx" data-id="${e.id}">Übung löschen</button></div>
@@ -275,9 +277,9 @@ function renderHist(){
   h.innerHTML=DB.ex.map(e=>`<option value="${e.id}"${e.id===cur?' selected':''}>${esc(e.name)}</option>`).join('');
   const list=DB.sets.map((s,i)=>({...s,i})).filter(s=>s.ex===h.value).reverse().slice(0,40);
   if(!list.length){$('hist').innerHTML='<p class="mute" style="margin:0">Noch keine Sätze für diese Übung.</p>';return;}
-  $('hist').innerHTML='<table><thead><tr><th>Datum</th><th>kg</th><th>Wdh.</th><th>Ø m/s</th><th>Abfall</th><th></th></tr></thead><tbody>'+list.map(s=>{
+  $('hist').innerHTML='<table><thead><tr><th>Datum</th><th>kg</th><th>Wdh.</th><th>Ø m/s</th><th>Weg</th><th>Abfall</th><th></th></tr></thead><tbody>'+list.map(s=>{
     const v=(s.reps||[]).map(r=>r.mcv),b=v.length?Math.max(...v):0,d=new Date(s.t);
-    return `<tr><td>${d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</td><td>${fmtKg(s.kg)}</td><td>${s.n}</td><td>${v.length?(v.reduce((a,c)=>a+c,0)/v.length).toFixed(2):'–'}</td><td>${v.length>1?((b-v[v.length-1])/b*100).toFixed(0)+' %':'–'}</td><td><button class="small ghost" data-act="delSet" data-i="${s.i}" aria-label="Satz löschen">✕</button></td></tr>`;}).join('')+'</tbody></table>';
+    return `<tr><td>${d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</td><td>${fmtKg(s.kg)}</td><td>${s.n}</td><td>${v.length?(v.reduce((a,c)=>a+c,0)/v.length).toFixed(2):'–'}</td><td>${v.length?(()=>{const w=s.reps.map(r=>r.rom).sort((a,b)=>a-b);return Math.round(w[Math.floor(w.length/2)]*100)+' cm';})():'–'}</td><td>${v.length>1?((b-v[v.length-1])/b*100).toFixed(0)+' %':'–'}</td><td><button class="small ghost" data-act="delSet" data-i="${s.i}" aria-label="Satz löschen">✕</button></td></tr>`;}).join('')+'</tbody></table>';
 }
 $('hEx').onchange=renderHist;
 
@@ -335,7 +337,7 @@ function beep(f,ms){if(DB.prefs.snd===false||!ac)return;try{const o=ac.createOsc
 
 // ---------- Sensor & Auswertung ----------
 let listening=false,phase='idle',calib=[],G=[0,0,9.81],gmag=9.81,dir=1,P=null;
-let B=[0,0,0],calL=[],C=[0,0,0,0,0,0],U=[.577,.577,.577],signSet=false,vtmp=0,raw=[],lastRaw=null,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
+let B=[0,0,0],calL=[],C=[0,0,0,0,0,0],U=[.577,.577,.577],signSet=false,vtmp=0,raw=[],lastRaw=null,pre=[],sgn=1,rb=[],seg=[],pk=0,atTop=false,pos=0,hist=[],ecc=null,tStart=null,setT0=0,nowT=0,af=0,v=0,lastT=0,stillT=0,inRep=false,acc=null,reps=[],trace=[],alerted=false,wake=null,cnt=0,rateT=performance.now();
 function onMotion(e){
   const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;cnt++;
   const t=performance.now()/1000;
@@ -351,22 +353,22 @@ function onMotion(e){
   const k=reps.length<2?.02:.006;
   C[0]+=k*(lx*lx-C[0]);C[1]+=k*(ly*ly-C[1]);C[2]+=k*(lz*lz-C[2]);C[3]+=k*(lx*ly-C[3]);C[4]+=k*(lx*lz-C[4]);C[5]+=k*(ly*lz-C[5]);
   for(let i=0;i<2;i++){const u=[C[0]*U[0]+C[3]*U[1]+C[4]*U[2],C[3]*U[0]+C[1]*U[1]+C[5]*U[2],C[4]*U[0]+C[5]*U[1]+C[2]*U[2]];const m=Math.hypot(...u);if(m>1e-9)U=u.map(x=>x/m);}
-  // 3) Richtung: Schwerkraftanteil (aIG minus Bewegung) zeigt, wo "oben" ist. iPhone und Android liefern
-  //    beide Werte in derselben Konvention, daher gilt: Beschleunigung nach oben = Skalarprodukt mit gp > 0.
+  // 3) Achse: bei senkrechten Übungen die echte Senkrechte (Schwerkraftrichtung, folgt auch dem Kippen,
+  //    z. B. beim Curl), bei waagerechten die gelernte Hauptachse.
   let gx=G[0],gy=G[1],gz=G[2];if(L&&L.x!=null){gx=a.x-L.x;gy=a.y-L.y;gz=a.z-L.z;}
-  const gm=Math.hypot(gx,gy,gz)||1,cv=(U[0]*gx+U[1]*gy+U[2]*gz)/gm;
-  if(dir!==0&&Math.abs(cv)>.5){if(cv<0)U=U.map(x=>-x);if(!signSet){signSet=true;v=0;}}
-  let aa=lx*U[0]+ly*U[1]+lz*U[2];
-  // Waagerechte Bewegung oder "automatisch": die erste deutliche Bewegung im Satz zählt als Hebephase
-  if(!signSet){vtmp=(vtmp+aa*dt)*.99;
-    if(Math.abs(vtmp)>.05){if(vtmp<0){U=U.map(x=>-x);vtmp=-vtmp;}signSet=true;v=vtmp;af=0;}else aa=0;}
-  if(!signSet)aa=0;
+  const gm=Math.hypot(gx,gy,gz)||1;
+  let aa=dir!==0?(lx*gx+ly*gy+lz*gz)/gm:lx*U[0]+ly*U[1]+lz*U[2];
+  // 4) Vorzeichen: Ein Satz beginnt immer mit der Hebephase. Die erste deutliche Bewegung zählt als positiv.
+  if(!signSet){vtmp=(vtmp+aa*dt)*.99;pre.push({dt,a:aa,v:0});if(pre.length>150)pre.shift();
+    // Sobald die Richtung feststeht, die Anfangsbewegung nachträglich mitzählen (sonst fehlt Weg bei Wdh. 1)
+    if(Math.abs(vtmp)>.05){sgn=vtmp<0?-1:1;signSet=true;let vv=0;for(const q of pre){q.a*=sgn;vv=(vv+q.a*q.dt)*(1-q.dt/2.5);q.v=vv;}rb.push(...pre);pre=[];v=vv;af=0;}aa=0;}
+  aa*=sgn;
   af+=.35*(aa-af);
   const r=e.rotationRate||{},rot=Math.hypot(r.alpha||0,r.beta||0,r.gamma||0);
   // Ruhe-Erkennung: kaum Beschleunigung und Drehung. Langsame, gleichmäßige Bewegung sieht genauso aus –
   // darum wird während einer Wiederholung nie zurückgesetzt.
   stillT=(Math.hypot(lx,ly,lz)<.2&&rot<12)?stillT+dt:0;
-  const sa=af*(dir===-1&&Math.abs(cv)>.5?-1:1);
+  const sa=af;
   // Erkennung mit "leckendem" Integrator (Zeitkonstante 2,5 s): Drift kann sich nicht aufschaukeln
   v=(v+sa*dt)*(1-dt/2.5);
   rb.push({dt,a:sa,v});if(rb.length>150)rb.shift();
@@ -387,12 +389,19 @@ function onMotion(e){
   pos=Math.max(0,pos+v*dt);
   if(inRep){if(v>pk)pk=v;const T=seg.reduce((x,q)=>x+q.dt,0);
     // Ende: Bewegung kehrt um, oder oben längere Pause, oder Sicherheitsgrenze 8 s
-    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r=measure(seg);if(r&&r.rom*100>=P.rom&&r.dur>=.25)addRep({...r,down:0});}}
+    if(v< -.02||(stillT>.25&&v<.35*pk)||T>8){inRep=false;v=0;stillT=0;atTop=true;const r=measure(seg),ref=romRef();if(r&&r.rom*100>=P.rom&&r.rom>=.5*ref&&r.dur>=.25)addRep({...r,down:0});}}
   hist.push({t,p:pos});if(hist.length>800)hist.shift();
   trace.push(v);if(trace.length>420)trace.shift();
 }
 // Genaue Messung einer Hebephase: Beschleunigung integrieren und Drift so entfernen,
 // dass die Geschwindigkeit am Anfang und am Ende (Umkehrpunkte) null ist.
+// Typischer Bewegungsweg: aus dem laufenden Satz (ab 2 Wdh.), sonst aus früheren Sätzen dieser Übung
+function romRef(){
+  const med=x=>{const y=[...x].sort((p,q)=>p-q);return y[Math.floor(y.length/2)];};
+  if(reps.length>=2)return med(reps.map(r=>r.rom));
+  const h=exById(curEx)?.romHist;if(h&&h.length)return med(h)/100;
+  return 0;
+}
 function measure(sg){
   if(sg.length<5)return null;let T=0,vi=0;const arr=[];
   for(const q of sg){vi+=q.a*q.dt;T+=q.dt;arr.push([T,vi,q.dt]);}
@@ -401,12 +410,12 @@ function measure(sg){
   if(i0<0||p<=0)return null;let d=0,dur=0;for(let i=i0;i<=i1;i++){d+=Math.max(vc[i],0)*arr[i][2];dur+=arr[i][2];}
   return{mcv:d/dur,pv:p,rom:d,dur};
 }
-window.gpDebug=()=>({raw,U,B,signSet});
+window.gpDebug=()=>({raw,U,B,signSet,reps});
 function finishCalib(){
   const n=calib.length,m=[0,1,2].map(i=>calib.reduce((s,c)=>s+c[i],0)/n);
   const sd=Math.sqrt(calib.reduce((s,c)=>s+(c[0]-m[0])**2+(c[1]-m[1])**2+(c[2]-m[2])**2,0)/n);
   if(sd>.25){calib=[];calL=[];status('Zu viel Bewegung – Handy ruhig halten …','warn');return;}
-  G=m;gmag=Math.hypot(...m);B=calL.length?[0,1,2].map(i=>calL.reduce((s,c)=>s+c[i],0)/calL.length):[0,0,0];calL=[];C=[0,0,0,0,0,0];U=[.577,.577,.577];signSet=false;vtmp=0;phase='run';af=0;v=0;lastT=0;stillT=0;inRep=false;trace=[];pos=0;hist=[];ecc=null;tStart=null;setT0=performance.now()/1000;
+  G=m;gmag=Math.hypot(...m);B=calL.length?[0,1,2].map(i=>calL.reduce((s,c)=>s+c[i],0)/calL.length):[0,0,0];calL=[];C=[0,0,0,0,0,0];U=[.577,.577,.577];signSet=false;vtmp=0;sgn=1;pre=[];phase='run';af=0;v=0;lastT=0;stillT=0;inRep=false;trace=[];pos=0;hist=[];ecc=null;tStart=null;setT0=performance.now()/1000;
   status('Los! Wiederholungen werden erkannt.','ok');beep(880,120);
 }
 function addRep(r){
@@ -423,10 +432,11 @@ function addRep(r){
 function renderReps(){
   if(!reps.length){$('reps').innerHTML='';return;}
   const best=Math.max(...reps.map(x=>x.mcv),.01);
+  const ref=reps.length>=3?romRef():0;
   $('reps').innerHTML=reps.map((r,i)=>{const l=(best-r.mcv)/best*100,c=l>=P.loss?'var(--bad)':l>=P.loss*.7?'var(--warn)':'var(--ok)';
     const tu=P.tu??2,td=P.td??2,ok=(x,z)=>x&&Math.abs(x-z)/z<=.3;
     const tt=`<span class="v" style="font-size:13px"><span style="color:${ok(r.dur,tu)?'var(--ok)':'var(--warn)'}">↑${r.dur.toFixed(1)}</span> <span style="color:${r.down?(ok(r.down,td)?'var(--ok)':'var(--warn)'):'var(--mute)'}">↓${r.down?r.down.toFixed(1):'–'}</span> s</span>`;
-    return `<div class="rep"><span class="mute">${i+1}</span><div class="bar" style="width:${(r.mcv/best*100).toFixed(0)}%;background:${c}"></div>${tt}<span class="v">${r.mcv.toFixed(2)} m/s</span></div>`;}).join('');
+    return `<div class="rep"><span class="mute">${i+1}</span><div class="bar" style="width:${(r.mcv/best*100).toFixed(0)}%;background:${c}"></div>${tt}<span class="v">${r.mcv.toFixed(2)} m/s<br><span style="font-size:12px;color:${ref&&r.rom<.8*ref?'var(--warn)':'var(--mute)'}">${(r.rom*100).toFixed(0)} cm${ref&&r.rom<.8*ref?' · Teil-Wdh.':''}</span></span></div>`;}).join('');
 }
 function status(t,c){const s=$('status');s.textContent=t;s.className=c||'mute';}
 function resetLive(){reps=[];trace=[];hist=[];pos=0;atTop=false;rb=[];seg=[];pk=0;tStart=null;ecc=null;setT0=0;updRing();$('nReps').textContent='0';$('lastV').textContent='–';$('loss').textContent='–';$('loss').style.color='';renderReps();status('Handy fest am Gewicht befestigen, dann Satz starten.');}
@@ -443,7 +453,7 @@ function stopSet(){
   lastRaw={ex:curEx,n:reps.length,ua:navigator.userAgent,rows:raw};raw=[];$('rawBtn').classList.remove('hidden');
   phase='idle';$('go').textContent='Satz mit Sensor starten';$('go').classList.remove('stop');
   try{wake?.release();}catch(e){}
-  if(reps.length){addSet({n:reps.length,reps:reps.map(r=>({mcv:+r.mcv.toFixed(3),pv:+r.pv.toFixed(3),rom:+r.rom.toFixed(3),dur:+r.dur.toFixed(2),down:+(r.down||0).toFixed(2)}))});status('Satz gespeichert ('+reps.length+' Wdh.)','ok');}
+  if(reps.length){const ee=exById(curEx),rs=reps.map(r=>r.rom*100).sort((p,q)=>p-q);ee.romHist=[...(ee.romHist||[]),Math.round(rs[Math.floor(rs.length/2)])].slice(-10);addSet({n:reps.length,reps:reps.map(r=>({mcv:+r.mcv.toFixed(3),pv:+r.pv.toFixed(3),rom:+r.rom.toFixed(3),dur:+r.dur.toFixed(2),down:+(r.down||0).toFixed(2)}))});status('Satz gespeichert ('+reps.length+' Wdh.)','ok');}
   else status('Keine Wiederholungen erkannt. Tipp: Unter „Geräte“ den Mindestweg verringern.','warn');
 }
 $('go').onclick=async()=>{
@@ -480,7 +490,7 @@ function draw(){
     for(let j=Math.max(0,Math.floor((now-4-t0)/cyc));j<(n||999);j++){const ta=t0+j*cyc;if(X(ta)>W+20)break;
       for(const [tt,q] of [[ta+tu+.15,1],[ta+tu+.3+td+.3,0]]){const x=X(tt);if(x>-10&&x<W+10){cx.beginPath();cx.arc(x,Y(q),4.5,0,7);cx.fill();}}}
     // Ist-Kurve
-    const ref=reps.length?reps.reduce((a,r)=>a+r.rom,0)/reps.length:.35;
+    const ref=romRef()||.35;
     if(hist.length>1){cx.strokeStyle='#ff6a2b';cx.lineWidth=3.5;cx.beginPath();let first=true;
       for(const h of hist){const x=X(h.t);if(x<-5)continue;const y=Y(h.p/ref);first?cx.moveTo(x,y):cx.lineTo(x,y);first=false;}cx.stroke();}
     // Soll-Punkt und Ist-Punkt
